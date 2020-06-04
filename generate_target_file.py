@@ -1,0 +1,16 @@
+
+link_to_file_dict = {}
+link_to_file_dict['https://streamable.com/mxgun'] = ['427_left', 0]
+link_to_file_dict['https://streamable.com/mpgeb'] = ['library_right',1]
+link_to_file_dict['https://streamable.com/3tnia'] = ['watercooler_tintersection_left',2]
+link_to_file_dict['https://streamable.com/33t8w'] = ['watercooler_tintersection_right',3]
+link_to_file_dict['https://streamable.com/cgogm'] = ['atrium',4]
+link_to_file_dict['https://streamable.com/6xnow'] = ['t_intersection',5]
+link_to_file_dict['https://streamable.com/z9jpf'] = ['kitchen_left',6]
+link_to_file_dict['https://streamable.com/fr8zo'] = ['t_right',7]
+link_to_file_dict['https://streamable.com/pa0ue'] = ['t_left',8]
+link_to_file_dict['https://streamable.com/wtf64'] = ['kitchen_right',9]
+link_to_file_dict['https://streamable.com/5cwz8'] = ['clock_double_door',10]
+link_to_file_dict['https://streamable.com/lxnq5'] = ['firealarm_double_door',11]
+link_to_file_dict['https://streamable.com/xwgn0'] = ['straight_clock',12]
+link_to_file_dict['https://streamable.com/uqzq1'] = ['straight_firealarm', 12]

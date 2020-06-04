@@ -22,6 +22,7 @@ import glob
 import bnpy.data.XData as XData
 from scipy.signal import savgol_filter
 
+from helper_functions import moving_average
 
 from matplotlib import pylab
 import seaborn as sns
@@ -31,6 +32,7 @@ import matplotlib
 
 FIG_SIZE = (10, 5)
 pylab.rcParams['figure.figsize'] = FIG_SIZE
+size_of_lidar_data = 1091
 
 ###############################################################################
 #
@@ -43,10 +45,11 @@ pylab.rcParams['figure.figsize'] = FIG_SIZE
 
 
 
+
 def read_data(path, doc_range=0, z_value=0):
     os.chdir(path)
     doc_range = [doc_range]
-    extension = 'csv.npy'
+    extension = 'npy'
     eoc_files = glob.glob('*.{}'.format(extension))
     print(path)
 
@@ -63,12 +66,12 @@ def read_data(path, doc_range=0, z_value=0):
         # string_path = path+str(i)+'.npy'
         file_names_list.append(path+i)
 
-        data = np.load(path + i).transpose()
+        data = np.load(path + i)#.transpose()
 
-        raw_data = np.load(path + i[:-3]+'full.npy').transpose()
+        # raw_data = np.load(path + i[:-3]+'full.npy').transpose()
         print(data.shape)
-        print(raw_data.shape)
-        list_of_complete_data.append(raw_data)
+        # print(raw_data.shape)
+        list_of_complete_data.append(data)
         # shape is samples x dim ( = 13) now
 
         # data cleaning:  removed all nan's, for actions the nans are zeros as there is no velocity
@@ -79,13 +82,13 @@ def read_data(path, doc_range=0, z_value=0):
         deleted_elem_array = np.array(range(data.shape[0]))
 
 
-        nan_array = np.argwhere(np.isnan(data[:, -1]))
+        elements_without_action_data = np.where(~data[:,0:2].any(axis=1))[0]
         # last_six_zeros = np.where(~data[:,-6:].any(axis=1))[0]
         #
         # common_elements = np.intersect1d(last_six_zeros, nan_array)
 
-        data = np.delete(data, nan_array, 0)
-        deleted_elem_array = np.delete(deleted_elem_array,nan_array,0)
+        data = np.delete(data, elements_without_action_data, 0)
+        deleted_elem_array = np.delete(deleted_elem_array,elements_without_action_data,0)
 
         # nan_array = np.argwhere(np.isnan(data[:, 0]))
         #
@@ -97,18 +100,19 @@ def read_data(path, doc_range=0, z_value=0):
 
 
         # check if entire row is zeros delete them
-        empty_array = np.where(~data[:,-6:].any(axis=1))[0]
-        data = np.delete(data,empty_array,0)
-        deleted_elem_array = np.delete(deleted_elem_array,empty_array,0)
-
-        list_of_empty_arrays.append(empty_array)
+        # empty_array = np.where(~data[:,0:2].any(axis=1))[0]
+        # data = np.delete(data,empty_array,0)
+        # deleted_elem_array = np.delete(deleted_elem_array,empty_array,0)
+        #
+        # list_of_empty_arrays.append(empty_array)
         list_of_action_indices.append(deleted_elem_array)
 
-        elements_greater_than_0 = np.argwhere(data[:,-4]>0.)
-        elements_lesser_than_0 = np.argwhere(data[:,-4]<0.)
-        data[:,-5] = data[:,-4] *1.;
-        data[elements_greater_than_0,-5] = 0.
-        data[elements_lesser_than_0,-4] = 0.
+        elements_greater_than_0 = np.argwhere(data[:,1]>0.)
+        elements_lesser_than_0 = np.argwhere(data[:,1]<0.)
+        action_data = data[:,0:3]
+        action_data[:,2] = action_data[:,1] *1.
+        action_data[elements_greater_than_0, 1] = 0.
+        action_data[elements_lesser_than_0, 2] = 0.
 
 
 
@@ -130,28 +134,32 @@ def read_data(path, doc_range=0, z_value=0):
         #
         # matplotlib.pyplot.show()
         # data = data * 100
-        data = np.cumsum(data,0)
 
 
-        data_prev = np.vstack([data[0, :], data[0:-1, :]])
-        doc_range.append(doc_range[-1] + data.shape[0])
+
+        action_data = np.cumsum(action_data,0)
+
+        # action_data = moving_average(action_data, n=10)
+
+        data_prev = np.vstack([action_data[0, :], action_data[0:-1, :]])
+        doc_range.append(doc_range[-1] + action_data.shape[0])
         if x is not None:
-            x = np.vstack((x, data))
+            x = np.vstack((x, action_data))
             x_prev = np.vstack((x_prev, data_prev))
-            z = np.hstack((z, np.ones(data.shape[0]) * z_value))
+            z = np.hstack((z, np.ones(action_data.shape[0]) * z_value))
             # if i < 2:
             #     z = np.hstack((z, np.zeros(data.shape[0])))
             # else:
             #     z = np.hstack((z, np.ones(data.shape[0])))
 
         else:
-            x = data
+            x = action_data
             x_prev = data_prev
-            z = np.ones(data.shape[0]) * z_value
-    matplotlib.pyplot.show()
+            z = np.ones(action_data.shape[0]) * z_value
+    # matplotlib.pyplot.show()
     print(doc_range)
 
-    return (x,x_prev,z, doc_range, list_of_action_indices,list_of_empty_arrays, file_names_list)
+    return (x,x_prev,z, np.array(doc_range), list_of_action_indices,list_of_empty_arrays, file_names_list, list_of_complete_data)
 
 
 
@@ -298,13 +306,26 @@ def show_single_sequence(
 #--------------
 # list_of_paths = []
 
-path_right = '/media/ng/7ccf8f98-7ab8-498b-b405-54df784c3191/ng/workspace/turtlebot/data_collection/take_right/'
-path_left = '/media/ng/7ccf8f98-7ab8-498b-b405-54df784c3191/ng/workspace/turtlebot/data_collection/take_left/'
-path_straight = '/media/ng/7ccf8f98-7ab8-498b-b405-54df784c3191/ng/workspace/turtlebot/data_collection/intersection_and_right/'
-path_4 = '/media/ng/7ccf8f98-7ab8-498b-b405-54df784c3191/ng/workspace/turtlebot/data_collection/intersection_and_left/'
-path_5 = '/media/ng/7ccf8f98-7ab8-498b-b405-54df784c3191/ng/workspace/turtlebot/data_collection/end_of_corridor/'
+# path_right = '/home/ng/workspace/corl_2019_all_code/data/final_files/left/'
+# path_left = '/home/ng/workspace/corl_2019_all_code/data/final_files/right/'
+path_straight = '/home/ng/workspace/corl_2019_all_code/data/final_files/full_behavior/'
+# path_3 = '/media/ng/LaCie SSD/all_cleaned_bags/library_right/'
+# path_4 = '/media/ng/LaCie SSD/all_cleaned_bags/427_left/'
+# path_5 = '/media/ng/LaCie SSD/all_cleaned_bags/clock_double_door/'
+# path_6 = '/media/ng/LaCie SSD/all_cleaned_bags/firealarm_double_door/'
+# path_7 = '/media/ng/LaCie SSD/all_cleaned_bags/kitchen_left/'
+# path_8 = '/media/ng/LaCie SSD/all_cleaned_bags/kitchen_right/'
+# path_9 = '/media/ng/LaCie SSD/all_cleaned_bags/straight_clock/'
+# path_10 = '/media/ng/LaCie SSD/all_cleaned_bags/straight_firealarm/'
+# path_11 = '/media/ng/LaCie SSD/all_cleaned_bags/t_intersection/'
+# path_12 = '/media/ng/LaCie SSD/all_cleaned_bags/watercooler_tintersection_left/'
+# path_13 = '/media/ng/LaCie SSD/all_cleaned_bags/watercooler_tintersection_right/'
 
-list_of_paths = [path_right,path_left,path_straight, path_4, path_5]
+
+
+list_of_paths = [path_straight]#[path_right,path_left,path_straight]#, path_3,\
+                 # path_4, path_5, path_6, path_7, path_8, path_9, path_10, \
+                 # path_11, path_12, path_13]
 doc_range_const = 0
 z_const = 0
 
@@ -313,7 +334,7 @@ list_of_action_indices = []
 file_names_list = []
 
 for path in list_of_paths:
-    x_temp,x_prev_temp, z_temp, doc_range_temp, list_of_action_indices_temp ,list_of_empty_arrays_temp , file_names_list_temp  = read_data(path,doc_range=doc_range_const,z_value=z_const)
+    x_temp,x_prev_temp, z_temp, doc_range_temp, list_of_action_indices_temp ,list_of_empty_arrays_temp , file_names_list_temp, complete_data_list  = read_data(path,doc_range=doc_range_const,z_value=z_const)
     list_of_empty_arrays.extend(list_of_empty_arrays_temp)
     list_of_action_indices.extend(list_of_action_indices_temp)
     file_names_list.extend(file_names_list_temp)
@@ -325,7 +346,7 @@ for path in list_of_paths:
         z = np.hstack((z, z_temp))
         doc_range = np.hstack((doc_range[:-1], doc_range_temp))
     doc_range_const = doc_range_temp[-1]
-    z_const=z_const+1
+    z_const=z_const+10
 
 # print("right")
 # x_eoc, x_prev_eoc, z_eoc, doc_range_eoc = read_data(path_right, z_value=0)
@@ -340,13 +361,14 @@ for path in list_of_paths:
 # z = np.hstack((z_eoc, z_straight, z_left))
 # doc_range = np.hstack((doc_range_eoc[:-1], doc_range_straight[:-1], doc_range_left))
 
-print("total trajectories: ", doc_range.shape)
+print("total trajectories: ", doc_range.shape[0]-1)
 
 
 
-dataset = GroupXData(X=x[:,-5:-2],doc_range=doc_range, Xprev=x_prev[:,-5:-2]) #, TrueZ=z
+dataset = GroupXData(X=x,doc_range=doc_range, Xprev=x_prev) #, TrueZ=z
 
-output_path_starter = '/media/ng/7ccf8f98-7ab8-498b-b405-54df784c3191/ng/workspace/bayesian_changepoint_detection/outputs/'
+# output_path_starter = '/media/ng/Vetnari/nakul_old_thinkpad/corl_all_data/all_cleaned_bags/new_outputs/'
+output_path_starter = '/home/ng/workspace/corl_2019_all_code/output/'
 
 
 ###############################################################################
@@ -370,8 +392,8 @@ alg_kwargs = dict(
 # ------------------------------
 
 hdphmm_kwargs = dict(
-    gamma = 10.0,       # top-level Dirichlet concentration parameter
-    transAlpha = 0.5,  # trans-level Dirichlet concentration parameter
+    gamma = 10.,       # top-level Dirichlet concentration parameter 10.
+    transAlpha = 0.5,  # trans-level Dirichlet concentration parameter 0.5
 )
 
 ###############################################################################
@@ -481,10 +503,10 @@ goodelbopairs_merge_kwargs = dict(
     )
 
 
-
+#trymerge-K=20-model=HDPHMM+ARMA-ECovMat=1*eye-merge_strategy=good_elbo_pairs/
 goodelbopairs_trained_model, goodelbopairs_info_dict = bnpy.run(
     dataset, 'HDPHMM', 'AutoRegGauss', 'memoVB', #
-    output_path=output_path_starter+'trymerge-K=20-model=HDPHMM+ARMA-ECovMat=1*eye-merge_strategy=good_elbo_pairs/',
+    output_path=output_path_starter+'test/',
     moves='merge,shuffle',
     **dict(
         alg_kwargs.items()
@@ -529,6 +551,7 @@ print("printing finished!")
 z_hat_list = []
 
 for pq in range(doc_range.shape[0]-1):
+    print(file_names_list[pq])
     log_lik_seq0_TK = goodelbopairs_trained_model.obsModel.calcLogSoftEvMatrix_FromPost(
     dataset.make_subset([pq])
     )
@@ -540,7 +563,7 @@ for pq in range(doc_range.shape[0]-1):
 
 
 
-np.savez('segment_run',dataset = dataset, z_hat_list = z_hat_list, file_names_list =file_names_list, list_of_action_indices = list_of_action_indices, list_of_empty_arrays =list_of_empty_arrays)
+np.savez('segment_run_movo',dataset = dataset, z_hat_list = z_hat_list, file_names_list =file_names_list, list_of_action_indices = list_of_action_indices, list_of_empty_arrays =list_of_empty_arrays)
 
 
 # paths = [
